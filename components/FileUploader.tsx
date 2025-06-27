@@ -1,32 +1,43 @@
+// components/FileUploader.tsx
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { CircleArrowDown, RocketIcon } from "lucide-react";
 
-function FileUploader() {
+export default function FileUploader() {
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle"|"processing"|"done">("idle");
+  const [result, setResult] = useState<string>("");
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
-    if (file) {
-      // Insert your backend call or processing logic here
-      console.log("Selected PDF:", file);
-      //an backend call can be made here to upload the file to /api/gettext
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-        const response = await fetch("/api/gettext", {
-          method: "POST",
-          body: formData,
-        });
-        if (!response.ok) {
-          throw new Error("File upload failed");
-        }
-        const data = await response.json();
-        console.log("File uploaded successfully:", data);
-      } catch (error) {
-        console.error("Error uploading file:", error);
+    if (!file) return;
+
+    setStatus("processing");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // 1) fire-and-forget upload to FastAPI
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const { jobId } = await res.json();
+    setJobId(jobId);
+
+    // 2) poll for result
+    const poll = async () => {
+      const r = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/result?jobId=${jobId}`);
+      const data = await r.json();
+      if (data.status === "done") {
+        setResult( data.message || "");
+        setStatus("done");
+      } else {
+        setTimeout(poll, 3000);
       }
-    }
+    };
+    poll();
   }, []);
 
   const { getRootProps, getInputProps, isDragActive, isFocused } = useDropzone({
@@ -39,31 +50,34 @@ function FileUploader() {
   });
 
   return (
-    <div className="flex flex-col gap-4 items-center justify-center max-w-7xl mx-auto">
+    <div className="flex flex-col items-center gap-4">
       <div
         {...getRootProps()}
-        className={`p-10 border-2 border-dashed mt-10 w-[90%] border-indigo-600 text-indigo-600 rounded-lg h-96 flex items-center justify-center ${
+        className={`p-10 border-2 border-dashed w-[90%] rounded-lg h-96 flex items-center justify-center ${
           isFocused || isDragActive ? "bg-indigo-300" : "bg-indigo-100"
         }`}
       >
         <input {...getInputProps()} />
-
-        <div className="flex flex-col items-center justify-center">
-          {isDragActive ? (
-            <>
-              <RocketIcon className="h-20 w-20 animate-ping" />
-              <p>Drop the PDF here ...</p>
-            </>
-          ) : (
-            <>
-              <CircleArrowDown className="h-20 w-20 animate-bounce" />
-              <p>Drag and drop a PDF here, or click to select</p>
-            </>
-          )}
-        </div>
+        {isDragActive ? (
+          <>
+            <RocketIcon className="h-20 w-20 animate-ping" />
+            <p>Drop the file here …</p>
+          </>
+        ) : (
+          <>
+            <CircleArrowDown className="h-20 w-20 animate-bounce" />
+            <p>Drag & drop a file here, or click to select</p>
+          </>
+        )}
       </div>
+
+      {status === "processing" && <p>Processing your document…</p>}
+      {status === "done" && (
+        <div className="w-[90%] p-4 bg-white rounded shadow">
+          <h4 className="font-bold mb-2">Summary</h4>
+          <p>{result}</p>
+        </div>
+      )}
     </div>
   );
 }
-
-export default FileUploader;
