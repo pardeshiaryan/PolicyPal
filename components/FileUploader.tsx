@@ -7,7 +7,7 @@ import { CircleArrowDown, RocketIcon } from "lucide-react";
 
 export default function FileUploader() {
   const [jobId, setJobId] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle"|"processing"|"done">("idle");
+  const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
   const [result, setResult] = useState<string>("");
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -18,20 +18,23 @@ export default function FileUploader() {
     const formData = new FormData();
     formData.append("file", file);
 
-    // 1) fire-and-forget upload to FastAPI
     const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/upload`, {
       method: "POST",
       body: formData,
     });
+
     const { jobId } = await res.json();
     setJobId(jobId);
 
-    // 2) poll for result
+    // Save jobId to localStorage
+    localStorage.setItem("jobId", jobId);
+
+    // Poll for result
     const poll = async () => {
       const r = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/result?jobId=${jobId}`);
       const data = await r.json();
       if (data.status === "done") {
-        setResult( data.message || "");
+        setResult(data.message || "");
         setStatus("done");
       } else {
         setTimeout(poll, 3000);

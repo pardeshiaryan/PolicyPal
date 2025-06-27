@@ -10,10 +10,11 @@ export async function POST(req: NextRequest) {
 
     // Create a chat session with history
   const chat = model.startChat({
-  history: history.map((msg: any) => ({
-    role: msg.role,
-    parts: [{ text: msg.text }],
-  })),
+ history: history.map((msg: any) => ({
+  role: msg.role === 'ai' ? 'model' : msg.role,  // 👈 correct mapping
+  parts: [{ text: msg.text }],
+})),
+
   generationConfig: {
     temperature: 0.7,
   },
