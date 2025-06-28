@@ -35,6 +35,7 @@ export default function FileUploader() {
       const data = await r.json();
       if (data.status === "done") {
         setResult(data.message || "");
+        localStorage.setItem("text", data.message || "");
         setStatus("done");
       } else {
         setTimeout(poll, 3000);
@@ -49,7 +50,7 @@ export default function FileUploader() {
       "application/pdf": [".pdf"],
       "image/*": [".jpg", ".jpeg", ".png", ".webp"],
     },
-    maxFiles: 1,
+    maxFiles: 5,
   });
 
   return (

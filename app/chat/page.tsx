@@ -1,12 +1,12 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 
 interface Message {
-  role: 'user' | 'model'; // was: 'user' | 'ai'
+  role: 'user' | 'model';
   text: string;
 }
-
 
 export default function Chatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -15,24 +15,17 @@ export default function Chatbot() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [context, setContext] = useState<string>('');
 
-  // Load jobId from localStorage and fetch context
   useEffect(() => {
     const savedJobId = localStorage.getItem('jobId');
+
     if (savedJobId) {
       setJobId(savedJobId);
-
-      fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/extract?jobId=${savedJobId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.status === 'done' && data.fields) {
-            const fieldEntries = Object.entries(data.fields)
-              .map(([key, value]) => `${key}: ${value}`)
-              .join('\n');
-            setContext(fieldEntries);
-          }
-        })
-        .catch(console.error);
+      const savedText = localStorage.getItem('text');
+      if (savedText) {
+        setContext(savedText); // Load saved context from localStorage
+      }
     }
+
   }, []);
 
   const sendMessage = async () => {
@@ -56,7 +49,7 @@ export default function Chatbot() {
       });
 
       const data = await res.json();
-const botMsg: Message = { role: 'model', text: data.reply };
+      const botMsg: Message = { role: 'model', text: data.reply };
       setMessages([...updatedMessages, botMsg]);
     } catch (err) {
       console.error('Chat error:', err);
