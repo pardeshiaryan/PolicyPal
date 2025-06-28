@@ -12,7 +12,7 @@ const model = new ChatGoogleGenerativeAI({
 });
 
 export async function POST(req: NextRequest) {
-  const { currentPolicyText } = await req.json();
+  const { currentPolicyText, problem } = await req.json();
 
   // Step 1: Load all 6 policy documents
   const policyDir = path.resolve(process.cwd(), "data/policies");
@@ -28,33 +28,36 @@ export async function POST(req: NextRequest) {
     .map(p => `---\n[${p.type.toUpperCase()} POLICY]\n${p.content}`)
     .join("\n\n");
 
-  // Step 3: Build LangChain prompt
+  // Step 3: Build LangChain prompt including user concerns
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", `
-You are an insurance advisor AI. Based on a user's current policy description and concerns, suggest the most suitable insurance policy from the list below.
+You are an insurance advisor AI. Based on a user's current policy description and their stated concerns, suggest the most suitable insurance policy from the list provided.
 
-Use only the policies and data given in this context:
+Context policies:
 {context}
 
-The user's current policy has the following issues:
-{currentPolicyText}
+User's current policy:
+{policyText}
+
+User's specific concerns or requests:
+{userConcerns}
 
 Your task:
-- Identify key problems in their current policy
-- Recommend the best matching policy from the context
-- Explain briefly why it's better
-- List 3-4 bullet points of benefits
+- Identify the key problems or gaps in their policy
+- Recommend the best matching policy from the context list
+- Explain briefly why it is better suited
+- Provide 3-4 bullet points highlighting benefits of the recommended policy
 
-Be concise and clear.
-`],
-    ["human", "Recommend a better policy"]
+Be concise and clear.`],
+    ["human", "Please recommend a better insurance plan."]
   ]);
 
-  // Step 4: Run LangChain
+  // Step 4: Run LangChain with both policy text and user concerns
   const chain = RunnableSequence.from([prompt, model]);
   const result = await chain.invoke({
     context,
-    currentPolicyText,
+    policyText: currentPolicyText,
+    userConcerns: problem || "No specific concerns provided"
   });
 
   return NextResponse.json({ recommendation: result.content });

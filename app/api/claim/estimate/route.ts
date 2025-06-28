@@ -1,4 +1,3 @@
-// app/api/claim/estimate/route.ts
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { RunnableSequence } from "@langchain/core/runnables";
@@ -6,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { MessageContent } from "@langchain/core/messages";
 
 const model = new ChatGoogleGenerativeAI({
-  model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
   apiKey: process.env.GEMINI_API_KEY!,
 });
 
@@ -30,10 +29,18 @@ function stripFences(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const { answers } = await req.json();
+  try {
+    const body = await req.json();
+    const answers = body.answers;
 
-  const prompt = ChatPromptTemplate.fromMessages([
-    ["system", `
+    if (!Array.isArray(answers)) {
+      return NextResponse.json({ error: "Invalid answers format" }, { status: 400 });
+    }
+
+    const formattedAnswers = answers.map((a: string, i: number) => `Q${i + 1}: ${a}`).join("\n");
+
+    const prompt = ChatPromptTemplate.fromMessages([
+      ["system", `
 You are an insurance claim eligibility estimator. Your job is to analyze the user's answers and return ONLY a structured JSON result with the following keys:
 
 - claimScore: number (0-100, likelihood of successful claim)
@@ -43,21 +50,19 @@ You are an insurance claim eligibility estimator. Your job is to analyze the use
 
 NEVER give disclaimers or say "I can't tell." If information is missing, say so in the 'reasons' and reflect uncertainty in score.
 `],
-    ["human", "{answers}"]
-  ]);
+      ["human", "{answers}"]
+    ]);
 
-  const chain = RunnableSequence.from([prompt, model]);
+    const chain = RunnableSequence.from([prompt, model]);
+    const result = await chain.invoke({ answers: formattedAnswers });
 
-  const formattedAnswers = answers.map((a: string, i: number) => `Q${i + 1}: ${a}`).join("\n");
-  const result = await chain.invoke({ answers: formattedAnswers });
+    let text = extractText(result.content);
+    text = stripFences(text).trim();
 
-  try {
-    // let text = extractText(result.content);
-    // text = stripFences(text).trim();
-    // const parsed = JSON.parse(text);
-    return NextResponse.json(result.content);
+    const parsed = JSON.parse(text);
+    return NextResponse.json(parsed);
   } catch (err) {
-    console.error("Failed to parse LLM response:", result.content);
+    console.error("Failed to parse LLM response:", err);
     return NextResponse.json({ error: "Failed to parse claim eligibility." }, { status: 500 });
   }
 }
